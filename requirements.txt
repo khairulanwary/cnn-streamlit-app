@@ -1,6 +1,0 @@
-streamlit==1.36.0
-tensorflow>=2.9,<2.13
-numpy
-pillow
-
-
