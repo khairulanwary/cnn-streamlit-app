@@ -8,51 +8,57 @@ import matplotlib.pyplot as plt
 # SETUP APLIKASI
 # ===================
 
-# Judul Aplikasi dan konfigurasi halaman
 st.set_page_config(page_title="Klasifikasi Gambar CIFAR-10", layout="centered")
 st.title("🎯 Prediksi Gambar CIFAR-10 dengan CNN")
 
-# Sidebar Navigasi, ditambah opsi menu baru "Uji Model"
+# Sidebar Navigasi
 st.sidebar.title("Navigasi")
-menu = st.sidebar.radio("Pilih Halaman:", ["Prediksi", "Info Model", "Grafik Akurasi/Loss", "Uji Model"])  # <-- Tambah "Uji Model"
+menu = st.sidebar.radio("Pilih Halaman:", ["Prediksi", "Info Model", "Grafik Akurasi/Loss", "Uji Model"])
 
-# Kelas CIFAR-10
+# Label CIFAR-10
 class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer',
                'dog', 'frog', 'horse', 'ship', 'truck']
 
-# Deskripsi tiap kelas
+# Deskripsi kelas (untuk Info Model)
 label_info = {
     'airplane': 'Pesawat terbang di udara',
     'automobile': 'Mobil atau kendaraan roda empat',
-    'bird': 'Burung, hewan bersayap yang bisa terbang',
-    'cat': 'Kucing peliharaan atau liar',
-    'deer': 'Rusa dengan tanduk dan hidup di hutan',
+    'bird': 'Burung, hewan bersayap',
+    'cat': 'Kucing peliharaan',
+    'deer': 'Rusa dengan tanduk',
     'dog': 'Anjing, sahabat manusia',
-    'frog': 'Katak yang hidup di air dan darat',
-    'horse': 'Kuda, hewan berkaki empat',
-    'ship': 'Kapal yang berlayar di laut',
+    'frog': 'Katak, hewan amfibi',
+    'horse': 'Kuda berkaki empat',
+    'ship': 'Kapal laut',
     'truck': 'Truk pengangkut barang'
 }
 
-# Load model CNN (cached agar efisien)
+# ===================
+# LOAD MODEL (cached)
+# ===================
 @st.cache_resource
 def load_model():
-    return tf.keras.models.load_model("cnn_cifar10_model.keras")
+    try:
+        model = tf.keras.models.load_model("cnn_cifar10_model.keras")
+        return model
+    except Exception as e:
+        st.error(f"❌ Gagal memuat model: {e}")
+        return None
 
 model = load_model()
 
 # ====================
-# HALAMAN: Prediksi (Upload 1 gambar)
+# HALAMAN: Prediksi
 # ====================
 if menu == "Prediksi":
     st.subheader("🖼️ Upload Gambar untuk Diprediksi")
     uploaded_file = st.file_uploader("Pilih file gambar (PNG/JPG)", type=["png", "jpg", "jpeg"])
 
-    if uploaded_file is not None:
+    if uploaded_file is not None and model:
         image = Image.open(uploaded_file).convert('RGB')
         st.image(image, caption='Gambar yang Diupload', use_container_width=True)
 
-        # Preprocessing gambar
+        # Preprocessing
         image_resized = image.resize((32, 32))
         img_array = np.array(image_resized) / 255.0
         img_array = np.expand_dims(img_array, axis=0)
@@ -63,101 +69,71 @@ if menu == "Prediksi":
         class_name = class_names[predicted_class]
         confidence = predictions[0][predicted_class]
 
-        # 🔍 DEBUG INFO:
-        # st.write("Predictions vector:", predictions[0])
-        # st.write("Predicted index:", predicted_class)
-        # st.write("Predicted class name:", class_name)
-
-        st.success(f"Hasil Prediksi: **{class_name.upper()}**")
-        st.write(f"Confidence Score: **{confidence:.2f}**")
-        st.markdown(f"📌 **Deskripsi Label:** {label_info[class_name]}")
-
-        # Bar chart semua probabilitas
-        st.subheader("📊 Probabilitas Tiap Kelas:")
-        fig, ax = plt.subplots()
-        ax.bar(class_names, predictions[0])
-        plt.xticks(rotation=45)
-        st.pyplot(fig)
+        st.success(f"🎯 Prediksi: **{class_name.upper()}** ({confidence*100:.2f}% yakin)")
+        st.caption(f"📘 Info: {label_info[class_name]}")
+    elif uploaded_file is not None and not model:
+        st.error("⚠ Model belum termuat. Cek apakah file cnn_cifar10_model.keras ada di direktori yang sama.")
 
 # ====================
 # HALAMAN: Info Model
 # ====================
 elif menu == "Info Model":
-    st.subheader("📄 Informasi Model CNN")
-    st.markdown("""
-    - Model: CNN (3 Conv layers, BatchNorm, Dropout)
-    - Optimizer: Adam
-    - Loss: Categorical Crossentropy
-    - Akurasi Validasi Terakhir: **~84%**
-    - Dataset: CIFAR-10
-    - Input: Gambar ukuran 32x32 piksel
-    """)
+    st.subheader("📌 Informasi Label CIFAR-10")
+    for cls in class_names:
+        st.markdown(f"**{cls.title()}**: {label_info[cls]}")
 
 # ====================
-# HALAMAN: Grafik Akurasi/Loss
+# HALAMAN: Grafik Akurasi / Loss
 # ====================
 elif menu == "Grafik Akurasi/Loss":
-    st.subheader("📈 Grafik Training Model")
+    st.subheader("📈 Grafik Akurasi dan Loss")
+
     try:
         history = np.load("history_cifar10.npy", allow_pickle=True).item()
-        acc = history["accuracy"]
-        val_acc = history["val_accuracy"]
-        loss = history["loss"]
-        val_loss = history["val_loss"]
+        acc = history['accuracy']
+        val_acc = history['val_accuracy']
+        loss = history['loss']
+        val_loss = history['val_loss']
+        epochs = range(1, len(acc) + 1)
 
-        # Akurasi
-        st.write("**Grafik Akurasi:**")
-        fig1, ax1 = plt.subplots()
-        ax1.plot(acc, label="Train Acc")
-        ax1.plot(val_acc, label="Val Acc")
-        ax1.set_xlabel("Epoch")
-        ax1.set_ylabel("Akurasi")
-        ax1.legend()
-        st.pyplot(fig1)
+        fig, ax = plt.subplots(1, 2, figsize=(12, 4))
 
-        # Loss
-        st.write("**Grafik Loss:**")
-        fig2, ax2 = plt.subplots()
-        ax2.plot(loss, label="Train Loss")
-        ax2.plot(val_loss, label="Val Loss")
-        ax2.set_xlabel("Epoch")
-        ax2.set_ylabel("Loss")
-        ax2.legend()
-        st.pyplot(fig2)
+        ax[0].plot(epochs, acc, label='Train Accuracy')
+        ax[0].plot(epochs, val_acc, label='Val Accuracy')
+        ax[0].set_title('Akurasi Model')
+        ax[0].legend()
 
-    except:
-        st.error("File `history_cifar10.npy` tidak ditemukan. Pastikan sudah disimpan saat training.")
+        ax[1].plot(epochs, loss, label='Train Loss')
+        ax[1].plot(epochs, val_loss, label='Val Loss')
+        ax[1].set_title('Loss Model')
+        ax[1].legend()
+
+        st.pyplot(fig)
+    except Exception as e:
+        st.error(f"⚠ Gagal menampilkan grafik: {e}")
 
 # ====================
-# HALAMAN: Uji Model (Multi-upload gambar, grid 4 kolom)
+# HALAMAN: Uji Model (bonus testing langsung CIFAR-10 sample)
 # ====================
 elif menu == "Uji Model":
-    st.title("🧪 Uji Model - Upload Gambar Bebas")
+    st.subheader("🧪 Uji Model dengan Gambar CIFAR-10")
 
-    uploaded_files = st.file_uploader(
-        "Upload satu atau lebih gambar (jpg/jpeg/png)", 
-        type=["jpg", "jpeg", "png"], 
-        accept_multiple_files=True,
-        help="Gambar akan otomatis di-resize ke 32x32 piksel sebelum diprediksi"
-    )
+    from keras.datasets import cifar10
+    (x_test, y_test) = cifar10.load_data()[1]
 
-    if uploaded_files:
-        st.write(f"📥 Total gambar di-upload: {len(uploaded_files)}")
+    idx = np.random.randint(0, len(x_test))
+    sample_image = x_test[idx]
+    sample_label = class_names[int(y_test[idx])]
 
-        num_cols = 4  # jumlah kolom grid
-        cols = st.columns(num_cols)
+    st.image(sample_image, caption=f"Label Asli: {sample_label.upper()}", use_container_width=True)
 
-        for i, uploaded_file in enumerate(uploaded_files):
-            image = Image.open(uploaded_file).convert("RGB")
-            image_resized = image.resize((32, 32))
-            img_array = np.array(image_resized) / 255.0
-            img_input = np.expand_dims(img_array, axis=0)
+    if model:
+        sample_input = sample_image / 255.0
+        sample_input = np.expand_dims(sample_input, axis=0)
 
-            prediction = model.predict(img_input)
-            pred_index = np.argmax(prediction)
-            confidence = float(np.max(prediction))
-            label_pred = class_names[pred_index]
+        predictions = model.predict(sample_input)
+        pred_class = class_names[np.argmax(predictions)]
 
-            # Tampilkan gambar dalam kolom yang sesuai
-            with cols[i % num_cols]:
-                st.image(image, caption=f"{label_pred} ({confidence*100:.1f}%)", use_container_width=True)
+        st.success(f"🎯 Prediksi Model: **{pred_class.upper()}**")
+    else:
+        st.warning("⚠ Model belum berhasil dimuat.")
