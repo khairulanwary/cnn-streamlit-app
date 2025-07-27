@@ -3,24 +3,23 @@ import tensorflow as tf
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
+import os
 
 # ===================
 # SETUP APLIKASI
 # ===================
 
-# Judul Aplikasi dan konfigurasi halaman
 st.set_page_config(page_title="Klasifikasi Gambar CIFAR-10", layout="centered")
 st.title("🎯 Prediksi Gambar CIFAR-10 dengan CNN")
 
-# Sidebar Navigasi, ditambah opsi menu baru "Uji Model"
+# Sidebar Navigasi
 st.sidebar.title("Navigasi")
-menu = st.sidebar.radio("Pilih Halaman:", ["Prediksi", "Info Model", "Grafik Akurasi/Loss", "Uji Model"])  # <-- Tambah "Uji Model"
+menu = st.sidebar.radio("Pilih Halaman:", ["Prediksi", "Info Model", "Grafik Akurasi/Loss", "Uji Model"])
 
-# Kelas CIFAR-10
+# Label kelas CIFAR-10
 class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer',
                'dog', 'frog', 'horse', 'ship', 'truck']
 
-# Deskripsi tiap kelas
 label_info = {
     'airplane': 'Pesawat terbang di udara',
     'automobile': 'Mobil atau kendaraan roda empat',
@@ -34,15 +33,27 @@ label_info = {
     'truck': 'Truk pengangkut barang'
 }
 
-# Load model CNN (cached agar efisien)
-@st.cache_resource
+# ===================
+# LOAD MODEL
+# ===================
 def load_model():
-    return tf.keras.models.load_model("cnn_cifar10_model.keras")
+    model_path = "cnn_cifar10_model.keras"
+    if not os.path.exists(model_path):
+        st.error(f"❌ File model '{model_path}' tidak ditemukan!")
+        return None
+    try:
+        model = tf.keras.models.load_model(model_path)
+        return model
+    except Exception as e:
+        st.error(f"❌ Gagal load model: {e}")
+        return None
 
 model = load_model()
+if model is None:
+    st.stop()
 
 # ====================
-# HALAMAN: Prediksi (Upload 1 gambar)
+# HALAMAN: Prediksi
 # ====================
 if menu == "Prediksi":
     st.subheader("🖼️ Upload Gambar untuk Diprediksi")
@@ -52,7 +63,7 @@ if menu == "Prediksi":
         image = Image.open(uploaded_file).convert('RGB')
         st.image(image, caption='Gambar yang Diupload', use_container_width=True)
 
-        # Preprocessing gambar
+        # Preprocessing
         image_resized = image.resize((32, 32))
         img_array = np.array(image_resized) / 255.0
         img_array = np.expand_dims(img_array, axis=0)
@@ -63,16 +74,11 @@ if menu == "Prediksi":
         class_name = class_names[predicted_class]
         confidence = predictions[0][predicted_class]
 
-        # 🔍 DEBUG INFO:
-        # st.write("Predictions vector:", predictions[0])
-        # st.write("Predicted index:", predicted_class)
-        # st.write("Predicted class name:", class_name)
-
         st.success(f"Hasil Prediksi: **{class_name.upper()}**")
         st.write(f"Confidence Score: **{confidence:.2f}**")
         st.markdown(f"📌 **Deskripsi Label:** {label_info[class_name]}")
 
-        # Bar chart semua probabilitas
+        # Grafik probabilitas
         st.subheader("📊 Probabilitas Tiap Kelas:")
         fig, ax = plt.subplots()
         ax.bar(class_names, predictions[0])
@@ -125,11 +131,13 @@ elif menu == "Grafik Akurasi/Loss":
         ax2.legend()
         st.pyplot(fig2)
 
-    except:
-        st.error("File `history_cifar10.npy` tidak ditemukan. Pastikan sudah disimpan saat training.")
+    except FileNotFoundError:
+        st.error("❌ File `history_cifar10.npy` tidak ditemukan.")
+    except Exception as e:
+        st.error(f"❌ Gagal menampilkan grafik: {e}")
 
 # ====================
-# HALAMAN: Uji Model (Multi-upload gambar, grid 4 kolom)
+# HALAMAN: Uji Model
 # ====================
 elif menu == "Uji Model":
     st.title("🧪 Uji Model - Upload Gambar Bebas")
@@ -143,8 +151,7 @@ elif menu == "Uji Model":
 
     if uploaded_files:
         st.write(f"📥 Total gambar di-upload: {len(uploaded_files)}")
-
-        num_cols = 4  # jumlah kolom grid
+        num_cols = 4
         cols = st.columns(num_cols)
 
         for i, uploaded_file in enumerate(uploaded_files):
@@ -158,6 +165,5 @@ elif menu == "Uji Model":
             confidence = float(np.max(prediction))
             label_pred = class_names[pred_index]
 
-            # Tampilkan gambar dalam kolom yang sesuai
             with cols[i % num_cols]:
                 st.image(image, caption=f"{label_pred} ({confidence*100:.1f}%)", use_container_width=True)
